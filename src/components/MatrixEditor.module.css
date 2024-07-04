@@ -1,0 +1,20 @@
+.MatrixEditor {
+    @apply absolute collapse collapse-arrow border-base-300 bg-base-200 border top-32 p-1 w-fit h-fit
+}
+
+.GridCellCorner {
+    @apply opacity-0 w-10 h-10
+}
+
+.GridCellHeaderTop {
+    @apply content-center rounded-b-full w-6 h-6 m-2 text-center text-xs
+}
+
+
+.GridCellHeaderLeft {
+    @apply content-center rounded-r-full w-6 h-6 m-2 text-center text-xs
+}
+
+.GridCell {
+    @apply bg-gray-800 border border-gray-700 w-10 h-10 text-white text-center text-xs content-center
+}

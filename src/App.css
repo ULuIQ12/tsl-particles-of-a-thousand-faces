@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+	font-family: "Rubik";
+	src: url("./assets/fonts/Rubik-VariableFont_wght.ttf");
+}
+
+#root {
+	@apply w-full min-h-screen
+}
+
+#threecanvas {
+	@apply absolute top-0 left-0 w-full h-full z-0
+}
+
+#app {
+	@apply flex flex-col top-0 left-0 p-4 w-fit font-rubik z-10
+}
+
+.uiButton {
+	@apply flex w-full rounded bg-blue-500 text-white text-sm px-2 py-1 uppercase justify-center
+}
+
+.slider {
+	@apply flex flex-row w-full items-center gap-3 -m-1
+}
+
+.sliderLabel {
+	@apply label w-72 text-sm
+}
+
+.sliderLabelValue {
+	@apply w-10 text-sm
+}
