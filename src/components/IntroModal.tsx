@@ -41,7 +41,7 @@ export default function IntroModal({
                             <li>Wheel to zoom</li>
                         </div>
                         
-                        <div className="pb-2">Have fun!</div>
+                        <div className="pb-2">Play with the sliders, click the buttons, and Have fun!</div>
                     
                     </div>
                 }
@@ -51,10 +51,10 @@ export default function IntroModal({
                         <div className="pb-2">Please try with a WebGPU compatible browser, like Chrome or Edge.</div>
                     </div>
                 }
-                <div className="modal-action">
-                <form method="dialog">
-                    <button className="btn" onClick={handleOpenCloseChange}>Close</button>
-                </form>
+                <div className="modal-action justify-center">
+                    <form method="dialog">
+                        <button className="btn btn-neutral w-80" onClick={handleOpenCloseChange}>OK, I will</button>
+                    </form>
                 </div>
             </div>
             </dialog>

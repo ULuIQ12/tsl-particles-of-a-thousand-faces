@@ -89,7 +89,12 @@ export default function MatrixEditor({
     const getGridDiv = () => {
 
         const currentPalette: PLPalette = PLPalManager.current;
-        const colors = currentPalette.particlesColors.map((c) => "#" + c.toString(16).padStart(6, "0"));
+        let colors: string[] = [];
+        if( config.appearance.palette.toLowerCase() !== "custom")
+            colors = currentPalette.particlesColors.map((c) => "#" + c.toString(16).padStart(6, "0"));
+        else 
+            colors = config.appearance.customColors.map((c) => "#" + c.toString(16).padStart(6, "0"));
+
         const columnHeaders = [];
         const rowHeaders = [];
         columnHeaders.push(<div key={"corner"} className={styles.GridCellHeader}></div>);

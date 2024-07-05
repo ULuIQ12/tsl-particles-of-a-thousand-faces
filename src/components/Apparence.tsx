@@ -77,6 +77,11 @@ export default function Apparence({
         onParamChange("additive", value);
     }
 
+    const handleAfterChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value:boolean = event.target.checked;
+        onParamChange("afterImage", value);
+    }
+
     const handleCustomColorChange = (index: number) => (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = parseInt(event.target.value.substr(1), 16);
         onCustomChange("color", value, index);
@@ -109,7 +114,7 @@ export default function Apparence({
                 <div className={"flex flex-row justify-between w-full pb-2"}>
                     { 
                         Array.from({length: 8}).map((_, index) => (                          
-                            <input key={index} type="color" className="w-8 h-8 bg-transparent" 
+                            <input key={index} type="color" className="w-8 h-8 bg-transparent cursor-pointer" 
                             value={"#" + config.appearance.customColors[index].toString(16).padStart(6, "0")}
                             onChange={handleCustomColorChange(index)}
                             />
@@ -119,12 +124,12 @@ export default function Apparence({
                 <div className="flex flex-row justify-between w-full pb-4">
                     <div className="flex flex-row items-center gap-2">
                         <div>Background color</div>
-                        <input type="color" className="w-8 h-8 bg-transparent" value={"#" + config.appearance.customBackgroundColor.toString(16).padStart(6, "0")} 
+                        <input type="color" className="w-8 h-8 bg-transparent cursor-pointer" value={"#" + config.appearance.customBackgroundColor.toString(16).padStart(6, "0")} 
                         onChange={handleCustomBgColorChange}/>
                     </div>
                     <div className="flex flex-row items-center gap-2">
                         <div>Frame color</div>
-                        <input type="color" className="w-8 h-8 bg-transparent" value={"#" + config.appearance.customFrameColor.toString(16).padStart(6, "0")} 
+                        <input type="color" className="w-8 h-8 bg-transparent cursor-pointer" value={"#" + config.appearance.customFrameColor.toString(16).padStart(6, "0")} 
                         onChange={handleCustomFrameColorChange}/>
                     </div>
                 </div>
@@ -165,10 +170,18 @@ export default function Apparence({
                 <span className="label-text">Make shape anular</span>
                 <input type="checkbox" className="toggle" checked={config.appearance.makeAnular} onChange={handleMakeAnularChange} />
             </label>
-            <label className="label cursor-pointer px-0 py-1">
-                <span className="label-text">Additive blending</span>
-                <input type="checkbox" className="toggle" checked={config.appearance.additive} onChange={handleAdditiveChange} />
-            </label>
+            <div className='tooltip' data-tip="Doesn't play well with light background">
+                <label className="label cursor-pointer px-0 py-1">
+                    <span className="label-text">Additive blending</span>
+                    <input type="checkbox" className="toggle" checked={config.appearance.additive} onChange={handleAdditiveChange} />
+                </label>
+            </div>
+            <div className='tooltip' data-tip="GPU intensive, doesn't play well with light background">
+                <label className="label cursor-pointer px-0 py-1">
+                    <span className="label-text">After image</span>
+                    <input type="checkbox" className="toggle" checked={config.appearance.afterImage} onChange={handleAfterChange} />
+                </label>
+            </div>
         </Collapsable>
     )
 }

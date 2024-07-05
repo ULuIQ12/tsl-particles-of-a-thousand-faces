@@ -3,7 +3,7 @@ import { OrbitControls, TrackballControls, WebGL } from "three/examples/jsm/Addo
 import WebGPU from "three/examples/jsm/capabilities/WebGPU.js";
 import PostProcessing from "three/examples/jsm/renderers/common/PostProcessing.js";
 import WebGPURenderer from "three/examples/jsm/renderers/webgpu/WebGPURenderer.js";
-import { pass } from "three/examples/jsm/nodes/Nodes.js";
+import { cond, pass, tslFn, uniform } from "three/examples/jsm/nodes/Nodes.js";
 
 import { IAnimatedElement } from "./interfaces/IAnimatedElement";
 import { ParticlesLife } from "./elements/ParticlesLife";
@@ -54,10 +54,9 @@ export class Root {
     clock: Clock = new Clock(false);
     post?: PostProcessing;
     initRenderer() {
-        //if (WebGPU.isAvailable() === false && WebGL.isWebGL2Available() === false) {
+        
         if (WebGPU.isAvailable() === false) { // doesn't work with WebGL2
-            //document.body.appendChild(WebGPU.getErrorMessage());
-            throw new Error('No WebGPU or WebGL2 support');
+            throw new Error('No WebGPU support');
         }
 
         this.renderer = new WebGPURenderer({ canvas: this.canvas, antialias: true });
@@ -67,7 +66,7 @@ export class Root {
         window.addEventListener('resize', this.onResize.bind(this));
     }
 
-    camera: PerspectiveCamera = new PerspectiveCamera(70, 1, .1, 500);
+    camera: PerspectiveCamera = new PerspectiveCamera(70, 1, .1, 200);
     controls?: OrbitControls | TrackballControls;
     initCamera() {
         const aspect: number = window.innerWidth / window.innerHeight;
@@ -84,18 +83,37 @@ export class Root {
     }
 
     postProcessing?: PostProcessing;
-
+    afterImagePass ;
+    scenePass ;
+    uUseAfterImage = uniform(0);
+    static setUseAfterImage( value:boolean ) {
+        if( Root.instance == null ) {
+            throw new Error("Root instance not found");
+        }
+        Root.instance.uUseAfterImage.value = value ? 1 : 0;
+    }
     initPost() {
 
-        const scenePass = pass(this.scene, this.camera);
+        this.scenePass = pass(this.scene, this.camera);
+        const scenePassColor = this.scenePass.getTextureNode();
+        this.afterImagePass = scenePassColor;
+        this.afterImagePass = this.afterImagePass.afterImage( 0.9 );
+
         this.postProcessing = new PostProcessing(this.renderer!);
-        this.postProcessing.outputNode = scenePass;
+        //this.postProcessing.outputNode = scenePass;
+        this.postProcessing.outputNode = cond( this.uUseAfterImage.lessThan(1), this.scenePass, this.afterImagePass);
     }
 
-    onResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
+    onResize( event, toSize?:Vector2 ) {
+        const size:Vector2 = new Vector2(window.innerWidth, window.innerHeight);
+        if(toSize) size.copy(toSize);
+
+        this.camera.aspect = size.x / size.y;
         this.camera.updateProjectionMatrix();
-        this.renderer!.setSize(window.innerWidth, window.innerHeight);
+        this.renderer!.setPixelRatio(window.devicePixelRatio);
+        this.renderer!.setSize(size.x, size.y);
+        this.renderer!.domElement.style.width = `${size.x}px`;
+        this.renderer!.domElement.style.height = `${size.y}px`;
     }
 
     animate() {
@@ -130,26 +148,24 @@ export class Root {
     savedPosition:Vector3 = new Vector3();
     async capture() {
         try {
+            this.capturing = true;
             const resolution:Vector2 = new Vector2(4096,4096);
             this.savedPosition.copy(this.camera.position);
             this.camera.position.set(0, 0, 100);
             this.camera.lookAt(0, 0, 0);
             this.camera.updateMatrixWorld(true);
             this.controls.target.set(0, 0, 0);
-            this.renderer.setPixelRatio(1);
-            this.renderer.setSize(resolution.x, resolution.y);
+            this.onResize(null, resolution);
+            ParticlesLife.showHideCurve(false);
+
+            await new Promise(resolve => setTimeout(resolve, 20));
+            await this.postProcessing!.renderAsync();
             
-            this.renderer.domElement.style.width = `${resolution.x}px`;
-            this.renderer.domElement.style.height = `${resolution.y}px`;
-            await new Promise(resolve => setTimeout(resolve, 20));
-            this.postProcessing!.render();
-            await new Promise(resolve => setTimeout(resolve, 20));
             const strMime = "image/jpeg";
             const imgData = this.renderer.domElement.toDataURL(strMime, 1.0);
             const strDownloadMime: string = "image/octet-stream";
             const filename: string = `particles_${(Date.now())}.jpg`
 
-            this.capturing = true;
             await this.saveFile(imgData.replace(strMime, strDownloadMime), filename);
 
         } catch (e) {
@@ -168,12 +184,13 @@ export class Root {
             link.click();
             this.renderer.domElement.removeChild(link);
         } else {
-            //location.replace(uri);
+            //
         }
         await new Promise(resolve => setTimeout(resolve, 10));
         this.camera.position.copy(this.savedPosition);
         this.controls.target.set(this.savedPosition.x, this.savedPosition.y, 0);
-        this.onResize();
+        this.onResize(null);
+        ParticlesLife.showHideCurve(true);
         this.capturing = false;
     }
 } 

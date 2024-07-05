@@ -21,7 +21,7 @@ function App() {
 	const [config, setConfig] = useState(PLConfig.get());
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-	const openBtRef = useRef<HTMLButtonElement>(null);
+	const closedButtons = useRef<HTMLDivElement>(null);
 	const sideButtonsRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -29,16 +29,15 @@ function App() {
 	}, []);
 
 	useEffect(() => {
+		const tl = gsap.timeline();
 		if (isDrawerOpen) {
-			const tl = gsap.timeline();
 			if (sideButtonsRef.current !== null) tl.to(sideButtonsRef.current, { left: 450, duration: 0.25, ease: "power1.out" }, 0);
-			if (openBtRef.current !== null) tl.to(openBtRef.current, { left: -50, duration: 0.25, ease: "power2.inOut" }, 0);
+			if (closedButtons.current !== null) tl.to(closedButtons.current, { left: -50, duration: 0.25, ease: "power2.in" }, 0);
 
 		}
 		else {
-			const tl = gsap.timeline();
 			if (sideButtonsRef.current !== null) tl.to(sideButtonsRef.current, { left: -50, duration: 0.2, ease: "power1.in" }, 0);
-			if (openBtRef.current !== null) tl.to(openBtRef.current, { left: 16, duration: 0.2, ease: "power2.inOut" }, 0);
+			if (closedButtons.current !== null) tl.to(closedButtons.current, { left: 16, duration: 0.2, ease: "power2.out" }, 0.2);
 		}
 	}, [isDrawerOpen]);
 
@@ -80,6 +79,7 @@ function App() {
 					const parsed = JSON.parse(json);
 					setConfig(parsed);
 					ParticlesLife.updateFullConfig(parsed);
+					Root.setUseAfterImage(parsed.appearance.afterImage);
 				};
 				reader.readAsText(file);
 			}
@@ -171,6 +171,9 @@ function App() {
 			case 'additive':
 				ParticlesLife.updateAdditive(value as boolean);
 				break;
+			case 'afterImage':
+				Root.setUseAfterImage(value as boolean);
+				break;
 
 		}
 	}
@@ -198,6 +201,7 @@ function App() {
 	const handlePresetLoadRequest = (preset) => {
 		console.log("handlePresetLoad : ", preset)
 		setConfig(preset);
+		Root.setUseAfterImage(preset.appearance.afterImage);
 		ParticlesLife.updateFullConfig(preset);
 		ParticlesLife.randomizePositions();
 	}
@@ -259,15 +263,19 @@ function App() {
 
 	return (
 		<div id='app'>
-			<div className="drawer-content flex flex-col gap-1">
-				<div className="tooltip tooltip-right" data-tip="Configuration">
-					<button className="btn btn-neutral btn-circle" onClick={handleOpen}> {tools()} </button>
-				</div>
-				<div className="tooltip tooltip-right" data-tip="Informations">
-					<button className="btn btn-neutral btn-circle" onClick={handleShowInfosClick}>{questionIcon()}</button>
-				</div>
-				<div className="tooltip tooltip-right" data-tip="Capture current state">
-					<button className="btn btn-neutral btn-circle" onClick={handleCaptureRequest}>{cameraIcon()}</button>
+			<div className="drawer-content ">
+				<div ref={closedButtons} className='absolute' >
+					<div className='flex flex-col gap-1'>
+						<div className="tooltip tooltip-right" data-tip="Configuration">
+							<button className="btn btn-neutral btn-circle" onClick={handleOpen}>{tools()}</button>
+						</div>
+						<div className="tooltip tooltip-right" data-tip="Informations">
+							<button className="btn btn-neutral btn-circle" onClick={handleShowInfosClick}>{questionIcon()}</button>
+						</div>
+						<div className="tooltip tooltip-right" data-tip="Capture current state">
+							<button className="btn btn-neutral btn-circle" onClick={handleCaptureRequest}>{cameraIcon()}</button>
+						</div>
+					</div>
 				</div>
 			</div>
 			<div className='drawer overflow-hidden'>
@@ -289,6 +297,12 @@ function App() {
 			</div>
 			<div ref={sideButtonsRef} className='absolute left-[-50px] flex flex-col gap-1'>
 				<button className="btn btn-neutral btn-circle drawer-button mb-2" onClick={handleClose}>{closeCross()}</button>
+				<div className="tooltip tooltip-right" data-tip="Informations">
+							<button className="btn btn-neutral btn-circle" onClick={handleShowInfosClick}>{questionIcon()}</button>
+						</div>
+						<div className="tooltip tooltip-right" data-tip="Capture current state">
+							<button className="btn btn-neutral btn-circle" onClick={handleCaptureRequest}>{cameraIcon()}</button>
+						</div>
 				<div className="tooltip tooltip-right" data-tip="Reset camera">
 					<button className=" btn btn-neutral btn-circle btn-sm" onClick={handleResetCamera}>{crosshairIcon()}</button>
 				</div>
@@ -311,10 +325,10 @@ function App() {
 					<button onClick={handlePromoToggle}>{uluLogo()}</button>
 				</div>
 				<ul ref={promoMenuRef} className="menu bg-base-200 rounded-box fixed bottom-24 right-8 opacity-0 px-0">
-					<li><a href="https://www.ulucode.com/" className="tooltip tooltip-left" data-tip="Website">{globeIcon()}</a></li>
-					<li><a href="https://x.com/ULuIQ12" className="tooltip tooltip-left" data-tip="Twitter/X">{twitterIcon()}</a></li>
-					<li><a href="https://github.com/ULuIQ12" className="tooltip tooltip-left" data-tip="GitHub">{githubIcon()}</a></li>
-					<li><a href="https://www.fxhash.xyz/u/Christophe%20%22Ulu%22%20Choffel" className="tooltip tooltip-left" data-tip="fx(hash)">{fxIcon()}</a></li>
+					<li><a href="https://www.ulucode.com/" className="tooltip tooltip-left" target='_blank' data-tip="Website">{globeIcon()}</a></li>
+					<li><a href="https://x.com/ULuIQ12" className="tooltip tooltip-left" target='_blank' data-tip="Twitter/X">{twitterIcon()}</a></li>
+					<li><a href="https://github.com/ULuIQ12" className="tooltip tooltip-left" target='_blank' data-tip="GitHub">{githubIcon()}</a></li>
+					<li><a href="https://www.fxhash.xyz/u/Christophe%20%22Ulu%22%20Choffel" target='_blank' className="tooltip tooltip-left" data-tip="fx(hash)">{fxIcon()}</a></li>
 				</ul>
 			</div>
 			<IntroModal />

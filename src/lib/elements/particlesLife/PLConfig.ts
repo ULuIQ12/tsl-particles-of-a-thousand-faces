@@ -60,11 +60,11 @@ export class PLAppearanceConfig {
     customColors: number[] = [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000];
     customBackgroundColor:number = 0xffffff;
     customFrameColor:number = 0x000000;
-
+    afterImage: boolean = false;
 }
 
 export class PLPointerConfig {
     attraction:number = 0.5;
-    strength: number = 1.0;
-    range: number = 10.0;
+    strength: number = 3.0;
+    range: number = 16.0;
 }

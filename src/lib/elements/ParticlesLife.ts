@@ -65,9 +65,10 @@ export class ParticlesLife implements IAnimatedElement {
 	frameColor = uniform(color(0x191e24));
 	attractorValues = uniforms(Array(64).fill(0)); //  not uniform, but uniforms !
 
-	usePerlinMatrixAnim = PLConfig.get().attraction.useNoise;
-	perlineTimeScale = PLConfig.get().attraction.noiseTimeScale;
-	perlinFrequency = PLConfig.get().attraction.noiseFrequency;
+	// noise animation, not uniforms, only used in normal JS
+	useNoiseMatrixAnim = PLConfig.get().attraction.useNoise;
+	noiseTimeScale = PLConfig.get().attraction.noiseTimeScale;
+	noiseFrequency = PLConfig.get().attraction.noiseFrequency;
 
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +129,9 @@ export class ParticlesLife implements IAnimatedElement {
 		const { mod, getAttWeight, getResponseLin, getResponseQua, getResponseCub, getResponseRot, getResponseRot2 } = this;
 
 		/**
+		 * This is the main compute node, in charge of the particles simulation
 		 * Runs on each particle, calculates the forces and updates their velocity and position
+		 * Called each frame , see update()
 		 */
 		this.computeParticles = tslFn(() => {
 
@@ -197,7 +200,7 @@ export class ParticlesLife implements IAnimatedElement {
 				dir.xy = this.uPointer.sub(position).xy;
 				const dist = length(dir);
 				const factor = clamp(dist.div(this.uPointerRange), EPSILON, EPSILON.oneMinus());
-				const pointerForce = this.pcurve(this.gain(factor, this.attractionGain), this.attractionAttack, this.attractionDecay).mul(this.uPointerAtt).mul(this.uPointerStrength);
+				const pointerForce = pow(factor.oneMinus(), 1.25).mul(this.uPointerAtt).mul(this.uPointerStrength); 
 				velocity.addAssign(dir.mul(pointerForce.div(max(dist, EPSILON))));
 			});
 
@@ -218,9 +221,9 @@ export class ParticlesLife implements IAnimatedElement {
 		 */
 		const opacityNode = tslFn(() => {
 			const velocity = velocityBuffer.element(instanceIndex);
-			const relVel = clamp(length(velocity), 0, maxVelocity).div(maxVelocity); // re-clamped because the pointer can make the velocity go over
+			const relVel = clamp(length(velocity), 0, maxVelocity).div(maxVelocity); // re-clamped because the pointer can make the velocity go over max (on purpose)
 			const rot = cond(this.uOrientToVelocity.equal(1), atan2(velocity.y, velocity.x).negate(), 0.0);
-			const size = cond(this.uVelocityToSize.equal(1), max(0.001, pow(relVel, 0.5)), 1.0).toVar();
+			const size = cond(this.uVelocityToSize.equal(1), max(0.01, pow(relVel, 1.5)), 1.0).toVar();
 			If(this.uIsAnular.equal(1), () => { size.subAssign(size.mul(float(0.15))) }); // anular shapes are drawn a bit smaller
 			const nuv = uv().remap(0, 1, -1, 1);
 			const shape = float(0.0).toVar().assign(this.shapeCircle(nuv, size, rot));
@@ -254,7 +257,7 @@ export class ParticlesLife implements IAnimatedElement {
 		particleMat.scaleNode = this.particleSize;
 		particleMat.transparent = true;
 		particleMat.depthWrite = false;
-		particleMat.depthTest = true;		
+		particleMat.depthTest = false;		
 		this.particleMat = particleMat;
 
 		const particles = new InstancedMesh(new PlaneGeometry(5, 5), particleMat, this.particleCount);
@@ -271,6 +274,7 @@ export class ParticlesLife implements IAnimatedElement {
 
 	/**
 	 * A small buffer contains the colors associated to the 8 types of particles
+	 * Should probably replace this with a uniform array
 	 * @param isCustom a flag indicating to use the users custom colors
 	 */
 	updateTypesColorsBuffer(isCustom:boolean = false) {
@@ -326,12 +330,13 @@ export class ParticlesLife implements IAnimatedElement {
 		}).else(() => {
 			const factor = min(dist.sub(this.separationDistance).div(this.attractionDistance), EPSILON.oneMinus()); // clamping and normalizing distance
 			force.assign(this.pcurve(this.gain(factor, this.attractionGain), this.attractionAttack, this.attractionDecay).mul(attFactor).mul(this.attractionForce));
+
 		});
 		return force;
 
 	});
 
-	// follows various ways to apply the direction vector by the force
+	// follows various ways to apply the direction vector to the force
 	getResponseLin = tslFn(([attraction, dir]) => {
 		const len = length(dir);
 		const force = this.getAttractorForce(attraction, dir);
@@ -369,7 +374,7 @@ export class ParticlesLife implements IAnimatedElement {
 		return delta.mul(force.div(max(len, EPSILON)));
 	});
 	//////// TSL : SHAPING FUNCTIONS, also see ../nodes/DistanceFunctions.ts ////////
-	// Mostly applying the rotation to the UVs and shaping the SDFs
+	// Applying the rotation to the UVs and shaping the SDFs for the use case
 	shapeCircle = tslFn(([uv_immutable, size_immutable, rot_immutable]) => {
 		const uv = vec2(uv_immutable).toVar();
 		uv.rotateAssign(rot_immutable);
@@ -479,6 +484,8 @@ export class ParticlesLife implements IAnimatedElement {
 	curveContainer: Group;
 	/**
 	 * A Quad to display the general attraction curve
+	 * Represents the force between two particles based on their distance, when their attraction factor is one.
+	 * The right part of the curve can be negative when this factor is negative
 	 */
 	addAttractorCurveView(): void {
 		const cv: Group = new Group();
@@ -535,70 +542,6 @@ export class ParticlesLife implements IAnimatedElement {
 		this.curveContainer.renderOrder = 100;
 	}
 
-
-	rayCaster: Raycaster = new Raycaster();
-	iPlane: Plane = new Plane(new Vector3(0, 0, 1));
-	tempV3: Vector3 = new Vector3();
-	ctl: Vector2 = new Vector2();
-	ctl3: Vector3 = new Vector3();
-	ctr: Vector2 = new Vector2();
-	ctr3: Vector3 = new Vector3();
-	cbl: Vector2 = new Vector2();
-	cbl3: Vector3 = new Vector3();
-	cbr: Vector2 = new Vector2();
-	cbr3: Vector3 = new Vector3();
-
-	/**
-	 * calculate the world position of the containing div and set the position and scale of the curve container to fit
-	 * could be simplified
-	 * @returns 
-	 */
-	handleCurvePlacement(): void {
-
-		if (this.curveContainer === undefined) return;
-
-		const curveElement = document.getElementById("curve-element");
-		const curveRect = curveElement.getBoundingClientRect();
-
-		this.ctl.set(
-			(curveRect.left) / window.innerWidth * 2 - 1,
-			-(curveRect.top) / window.innerHeight * 2 + 1,
-		);
-		this.rayCaster.setFromCamera(this.ctl, this.camera);
-		this.rayCaster.ray.intersectPlane(this.iPlane, this.ctl3);
-		this.ctr.set(
-			(curveRect.right) / window.innerWidth * 2 - 1,
-			-(curveRect.top) / window.innerHeight * 2 + 1,
-		);
-		this.rayCaster.setFromCamera(this.ctr, this.camera);
-		this.rayCaster.ray.intersectPlane(this.iPlane, this.ctr3);
-		this.cbl.set(
-			(curveRect.left) / window.innerWidth * 2 - 1,
-			-(curveRect.bottom) / window.innerHeight * 2 + 1,
-		);
-		this.rayCaster.setFromCamera(this.cbl, this.camera);
-		this.rayCaster.ray.intersectPlane(this.iPlane, this.cbl3);
-		this.cbr.set(
-			(curveRect.right) / window.innerWidth * 2 - 1,
-			-(curveRect.bottom) / window.innerHeight * 2 + 1,
-		);
-		this.rayCaster.setFromCamera(this.cbr, this.camera);
-		this.rayCaster.ray.intersectPlane(this.iPlane, this.cbr3);
-
-		this.curveContainer.position.set(
-			(this.ctl3.x + this.ctr3.x) * .5,
-			(this.ctl3.y + this.cbl3.y) * .5,
-			0
-		);
-
-		this.curveContainer.scale.set(
-			this.ctr3.x - this.ctl3.x,
-			this.ctl3.y - this.cbl3.y,
-			1
-		);
-	}
-
-	
 	// tried various options to modify the uniforms, this (accessing "array") seems to work and is concise
 	setSingleWeight(i: number, value: number): void {
 		this.attractorValues.array[i] = value;
@@ -612,14 +555,14 @@ export class ParticlesLife implements IAnimatedElement {
 	// the noise generator is https://www.npmjs.com/package/@webvoxel/fast-simplex-noise 
 	matrixNoise: FastSimplexNoise = new FastSimplexNoise({ frequency: 1, octaves: 2, amplitude: 1.0, persistence: 0.5 });
 	handleMatrixAnimation() {
-		if (!this.usePerlinMatrixAnim) return;
+		if (!this.useNoiseMatrixAnim) return;
 
 		const newData = [];
 		// for the whole matrix, so 8*8
 		for (let i = 0; i < this.maxTypes; i++) {
 			for (let j = 0; j < this.maxTypes; j++) {
 				// sample the noise at the 2d position in the matrix
-				const val = this.matrixNoise.scaled([(i + this.lastElapsed * this.perlineTimeScale) * this.perlinFrequency, j * this.perlinFrequency]);
+				const val = this.matrixNoise.scaled([(i + this.lastElapsed * this.noiseTimeScale) * this.noiseFrequency, j * this.noiseFrequency]);
 				newData.push(val);
 			}
 		}
@@ -675,6 +618,69 @@ export class ParticlesLife implements IAnimatedElement {
 		this.camera.position.y = MathUtils.clamp(this.camera.position.y, -this.scrollLimit, this.scrollLimit);
 		this.controls.target.x = MathUtils.clamp(this.controls.target.x, -this.scrollLimit, this.scrollLimit);
 		this.controls.target.y = MathUtils.clamp(this.controls.target.y, -this.scrollLimit, this.scrollLimit);
+		this.camera.updateMatrixWorld(); // updating for curve placement
+	}
+
+	// some variables for the curve placement
+	rayCaster: Raycaster = new Raycaster();
+	iPlane: Plane = new Plane(new Vector3(0, 0, 1));
+	tempV3: Vector3 = new Vector3();
+	ctl: Vector2 = new Vector2();
+	ctl3: Vector3 = new Vector3();
+	ctr: Vector2 = new Vector2();
+	ctr3: Vector3 = new Vector3();
+	cbl: Vector2 = new Vector2();
+	cbl3: Vector3 = new Vector3();
+	cbr: Vector2 = new Vector2();
+	cbr3: Vector3 = new Vector3();
+	/**
+	 * calculate the world position of the containing div and set the position and scale of the curve container to fit
+	 * could be simplified
+	 * @returns 
+	 */
+	handleCurvePlacement(): void {
+
+		if (this.curveContainer === undefined) return;
+
+		const curveElement = document.getElementById("curve-element");
+		const curveRect = curveElement.getBoundingClientRect();
+
+		this.ctl.set(
+			(curveRect.left) / window.innerWidth * 2 - 1,
+			-(curveRect.top) / window.innerHeight * 2 + 1,
+		);
+		this.rayCaster.setFromCamera(this.ctl, this.camera);
+		this.rayCaster.ray.intersectPlane(this.iPlane, this.ctl3);
+		this.ctr.set(
+			(curveRect.right) / window.innerWidth * 2 - 1,
+			-(curveRect.top) / window.innerHeight * 2 + 1,
+		);
+		this.rayCaster.setFromCamera(this.ctr, this.camera);
+		this.rayCaster.ray.intersectPlane(this.iPlane, this.ctr3);
+		this.cbl.set(
+			(curveRect.left) / window.innerWidth * 2 - 1,
+			-(curveRect.bottom) / window.innerHeight * 2 + 1,
+		);
+		this.rayCaster.setFromCamera(this.cbl, this.camera);
+		this.rayCaster.ray.intersectPlane(this.iPlane, this.cbl3);
+		this.cbr.set(
+			(curveRect.right) / window.innerWidth * 2 - 1,
+			-(curveRect.bottom) / window.innerHeight * 2 + 1,
+		);
+		this.rayCaster.setFromCamera(this.cbr, this.camera);
+		this.rayCaster.ray.intersectPlane(this.iPlane, this.cbr3);
+
+		this.curveContainer.position.set(
+			(this.ctl3.x + this.ctr3.x) * .5,
+			(this.ctl3.y + this.cbl3.y) * .5,
+			0
+		);
+
+		this.curveContainer.scale.set(
+			this.ctr3.x - this.ctl3.x,
+			this.ctl3.y - this.cbl3.y,
+			1
+		);
 	}
 
 	resetCamera(): void {
@@ -689,13 +695,13 @@ export class ParticlesLife implements IAnimatedElement {
 	lastElapsed: number = 0;
 	update(dt: number, elapsed: number): void {
 
-
+		this.clampControls();
 		this.handleCurvePlacement();
 		this.handleMatrixAnimation();
 		//this.renderer.computeAsync(this.computeParticles);
 		this.renderer.compute(this.computeParticles);
 
-		this.clampControls();
+		
 
 		this.lastElapsed = elapsed;
 	}
@@ -731,9 +737,9 @@ export class ParticlesLife implements IAnimatedElement {
 			i.uOrientToVelocity.value = config.appearance.orientToVel ? 1 : 0;
 			i.uIsAnular.value = config.appearance.makeAnular ? 1 : 0;
 			i.uParticleShape.value = config.appearance.shape;
-			i.usePerlinMatrixAnim = config.attraction.useNoise;
-			i.perlineTimeScale = config.attraction.noiseTimeScale;
-			i.perlinFrequency = config.attraction.noiseFrequency;
+			i.useNoiseMatrixAnim = config.attraction.useNoise;
+			i.noiseTimeScale = config.attraction.noiseTimeScale;
+			i.noiseFrequency = config.attraction.noiseFrequency;
 
 			i.uPointerAtt.value = config.pointer.attraction;
 			i.uPointerStrength.value = config.pointer.strength;
@@ -771,14 +777,14 @@ export class ParticlesLife implements IAnimatedElement {
 
 	public static togglePerlinAnim(value: boolean): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.usePerlinMatrixAnim = value;
+			ParticlesLife.instance.useNoiseMatrixAnim = value;
 		}
 	}
 
 	public static updatePerlinParams(timeScale: number, frequency: number): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.perlineTimeScale = timeScale;
-			ParticlesLife.instance.perlinFrequency = frequency;
+			ParticlesLife.instance.noiseTimeScale = timeScale;
+			ParticlesLife.instance.noiseFrequency = frequency;
 		}
 	}
 
@@ -865,6 +871,12 @@ export class ParticlesLife implements IAnimatedElement {
 	public static randomizePositions(): void {
 		if (ParticlesLife.instance !== undefined) {
 			ParticlesLife.instance.renderer.compute(ParticlesLife.instance.computeInit);
+		}
+	}
+
+	public static showHideCurve(value: boolean): void {
+		if (ParticlesLife.instance !== undefined) {
+			ParticlesLife.instance.curveContainer.visible = value;
 		}
 	}
 }
