@@ -71,14 +71,20 @@ This will create an optimized build of the project in the `dist` directory.
 
 
 ## Acknowledgements
-Algorithm based on Clusters by Jeffrey Ventrella https://www.ventrella.com/Clusters/
-Uses Three.js https://threejs.org/
-Built with Vite https://vitejs.dev/
-UI Management uses React https://react.dev/
-UI components use TailwindCSS https://tailwindcss.com/ and daisyUI https://daisyui.com/
-SDF functions and other utilities from Inigo Quilez https://iquilezles.org/
-Uses GSAP https://gsap.com/
-Font is Rubik https://fonts.google.com/specimen/Rubik , license in /src/assets/fonts/
+- Algorithm based on Clusters by Jeffrey Ventrella https://www.ventrella.com/Clusters/
+- Uses Three.js https://threejs.org/
+- Built with Vite https://vitejs.dev/
+- UI Management uses React https://react.dev/
+- UI components use TailwindCSS https://tailwindcss.com/ and daisyUI https://daisyui.com/
+- SDF functions and other utilities from Inigo Quilez https://iquilezles.org/
+- Uses GSAP https://gsap.com/
+- Font is Rubik https://fonts.google.com/specimen/Rubik , license in /src/assets/fonts/
+
+## Resources 
+- Three.js WebGPU examples : https://threejs.org/examples/?q=webgpu
+- Three.js TSL documentation : https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language
+- Jeffrey Ventrella explains "Clusters" in video : https://vimeo.com/222974687
+- Video from Tom Mohr about the math of the algorithm with some code examples : https://www.youtube.com/watch?v=scvuli-zcRc
 
 
    
