@@ -20,13 +20,28 @@ function App() {
 
 	const [config, setConfig] = useState(PLConfig.get());
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+	const [isUIHidden, setIsUIHidden] = useState(false);
 
 	const closedButtons = useRef<HTMLDivElement>(null);
 	const sideButtonsRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		(document.getElementById('intro-modal') as unknown as any).showModal();
+
 	}, []);
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.code === 'Space') {
+				console.log( "toggle UI")
+				setIsUIHidden(!isUIHidden);
+			}
+		};
+		window.addEventListener('keydown', handleKeyDown);
+		return () => {
+			window.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [isUIHidden]);
 
 	useEffect(() => {
 		const tl = gsap.timeline();
@@ -272,7 +287,7 @@ function App() {
 
 	return (
 		<div id='app'>
-			<div className="drawer-content ">
+			<div className="drawer-content" style={isUIHidden?{visibility:"hidden"}:{visibility:"visible"}}>
 				<div ref={closedButtons} className='absolute' >
 					<div className='flex flex-col gap-1'>
 						<div className="tooltip tooltip-right" data-tip="Configuration">
@@ -340,8 +355,9 @@ function App() {
 					<li><a href="https://www.fxhash.xyz/u/Christophe%20%22Ulu%22%20Choffel" target='_blank' className="tooltip tooltip-left" data-tip="fx(hash)">{fxIcon()}</a></li>
 				</ul>
 			</div>
-			<IntroModal />
+			
 			<InfoModal isOpen={infoModalOpen} onClose={handleInfoClose} />
+			<IntroModal />
 		</div>
 	)
 }

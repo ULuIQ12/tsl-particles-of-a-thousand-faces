@@ -1,12 +1,31 @@
 # Particles of a Thousand faces
 
-![Particle Simulation Example](./readme/collage.jpg "Particle Simulation")
+![Particles of a Thousand faces](./readme/collage.jpg "Particles of a Thousand faces")
 
 Welcome to "Particles of a Thousand Faces" - a particle simulation designed to test and experiment with the Three Shading Language. I always found this algorithm to be fast and fun to implement, with plenty of tinkering potiential. It's also quite pleasing to look at.
+This repo is adressed to three.js enthousiasts curious about TSL, but also to creative coders who may not know about this particular algorithm.
 
 ## Website 
 
 Visit https://ulucode.com/random/webgputests/particles/ to play!
+Requires a browser with WebGPU support.
+
+## TSL 
+Most of the important code, regarding TSL and the implementation of the algorithm is in [/src/lib/elements/ParticlesLife.ts](https://github.com/ULuIQ12/tsl-particles-of-a-thousand-faces/blob/main/src/lib/elements/ParticlesLife.ts)
+The file is heavily commented and uses descriptive variable names.
+It is partially typed, but don't worry if you know nothing about Typescript : you can safely ignore it (although I would encourage you to look into it).
+
+## Disclaimer
+This is very experimental : I haven't looked under the hood at how TSL works, I'm just going from the examples provided by three.js and their documentation. 
+I can't guarantee that I'm following good TSL practices is such a thing exists. My goal was to produce a fun toy, with an artistic flavor.
+
+## Features
+
+- **TSL and WebGPU**: Takes advantage of Three Shading Language (TSL) and WebGPU, with vertex, fragment and compute shaders all in Javascript, no WGSL involved for the end user.
+- **Interactive Simulation**: Plenty of buttons and sliders to play with, as well cursor interactions.
+- **Configuration import/export**: save/load configuration to JSON.
+- **Capture**: Capture still frames of your creation.
+
 
 ## Getting Started
 
@@ -51,15 +70,15 @@ npm run build
 This will create an optimized build of the project in the `dist` directory.
 
 
-## Features
-
-- **Three.js Integration**: Utilizes the latest three.js library for 3D graphics and animations.
-- **TSL and WebGPU**: Takes advantage of Three Shading Language (TSL) and WebGPU for high-performance, real-time graphics rendering.
-- **Nodal Approach**: Implements a nodal system for creating complex particle behaviors and effects.
-- **Interactive Simulations**: Offers interactive simulations that users can tweak and play with to explore different outcomes.
-
-
-
+## Acknowledgements
+Algorithm based on Clusters by Jeffrey Ventrella https://www.ventrella.com/Clusters/
+Uses Three.js https://threejs.org/
+Built with Vite https://vitejs.dev/
+UI Management uses React https://react.dev/
+UI components use TailwindCSS https://tailwindcss.com/ and daisyUI https://daisyui.com/
+SDF functions and other utilities from Inigo Quilez https://iquilezles.org/
+Uses GSAP https://gsap.com/
+Font is Rubik https://fonts.google.com/specimen/Rubik , license in /src/assets/fonts/
 
 
    

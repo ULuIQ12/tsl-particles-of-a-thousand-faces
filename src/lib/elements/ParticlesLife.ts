@@ -63,7 +63,7 @@ export class ParticlesLife implements IAnimatedElement {
 	backgroundColor = uniform(color(0xecebdb));
 	frameColor = uniform(color(0x191e24));
 	// the following  are uniforms with an "s" because they are arrays
-	//I tried storing them first in small textures, then in storageBuffers, but in makes more sens that way, as then ca be updated frequently
+	//I tried storing them first in small textures, then in storageBuffers, but it makes more sense that way, as then can be updated frequently
 	attractorValues = uniforms(Array(this.maxTypesSq).fill(0)); // 8*8, the matrix of attraction values between types
 	typeColors = uniforms(Array(this.maxTypes).fill(0)); // The 8 particle colors
 
