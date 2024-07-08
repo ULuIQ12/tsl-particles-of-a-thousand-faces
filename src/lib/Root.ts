@@ -60,7 +60,7 @@ export class Root {
 
         this.renderer = new WebGPURenderer({ canvas: this.canvas, antialias: true });
         console.log("Renderer :", this.renderer);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.setPixelRatio(1);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         window.addEventListener('resize', this.onResize.bind(this));
     }
@@ -109,7 +109,8 @@ export class Root {
 
         this.camera.aspect = size.x / size.y;
         this.camera.updateProjectionMatrix();
-        this.renderer!.setPixelRatio(window.devicePixelRatio);
+        //this.renderer!.setPixelRatio(window.devicePixelRatio);
+        this.renderer!.setPixelRatio(1);
         this.renderer!.setSize(size.x, size.y);
         this.renderer!.domElement.style.width = `${size.x}px`;
         this.renderer!.domElement.style.height = `${size.y}px`;
