@@ -31,13 +31,12 @@ export class ParticlesLife implements IAnimatedElement {
 	controls: TrackballControls;
 	particleMat: SpriteNodeMaterial;
 
-	maxTypes = 8; 
-	maxTypesSq = this.maxTypes * this.maxTypes;
-	particleCount = Math.pow(2, 14); // 16384 , can't really go higher on my machine without some performance issues ( 1080 GTX 8GB )
+	maxTypes:number = 8; 
+	maxTypesSq:number = this.maxTypes * this.maxTypes;
+	particleCount:number = Math.pow(2, 14); // 16384 , can't really go higher on my machine without some performance issues ( 1080 GTX 8GB )
 
-	computeInit; // TSL initialization node
-	computeParticles; // main TSL update node
-	typeColorsBuffer; // contains the current palette colors. I suppose this also could stored in uniforms, it's not that long
+	computeInit; // TSL initialization/reset node
+	computeParticles; // main TSL particles update node
 
 	// uniforms
 	nbTypes = uniform(PLConfig.get().attraction.nbTypes);
@@ -56,19 +55,23 @@ export class ParticlesLife implements IAnimatedElement {
 	separationPower = uniform(PLConfig.get().physics.separationPower);
 	particleSize = uniform(PLConfig.get().appearance.particleSize);
 	particleSmoothness = uniform(PLConfig.get().appearance.particleSmoothness);
-	uVelocityToSize = uniform(PLConfig.get().appearance.velToSize ? 1 : 0);
-	uVelocityToAlpha = uniform(PLConfig.get().appearance.velToAlpha ? 1 : 0);
-	uOrientToVelocity = uniform(PLConfig.get().appearance.orientToVel ? 1 : 0);
-	uIsAnular = uniform(PLConfig.get().appearance.makeAnular ? 1 : 0);
-	uParticleShape = uniform(PLConfig.get().appearance.shape);
+	velocityToSize = uniform(PLConfig.get().appearance.velToSize ? 1 : 0);
+	velocityToAlpha = uniform(PLConfig.get().appearance.velToAlpha ? 1 : 0);
+	orientToVelocity = uniform(PLConfig.get().appearance.orientToVel ? 1 : 0);
+	isAnular = uniform(PLConfig.get().appearance.makeAnular ? 1 : 0);
+	particleShape = uniform(PLConfig.get().appearance.shape);
 	backgroundColor = uniform(color(0xecebdb));
 	frameColor = uniform(color(0x191e24));
-	attractorValues = uniforms(Array(64).fill(0)); //  not uniform, but uniforms !
+	// the following  are uniforms with an "s" because they are arrays
+	//I tried storing them first in small textures, then in storageBuffers, but in makes more sens that way, as then ca be updated frequently
+	attractorValues = uniforms(Array(this.maxTypesSq).fill(0)); // 8*8, the matrix of attraction values between types
+	typeColors = uniforms(Array(this.maxTypes).fill(0)); // The 8 particle colors
 
 	// noise animation, not uniforms, only used in normal JS
-	useNoiseMatrixAnim = PLConfig.get().attraction.useNoise;
-	noiseTimeScale = PLConfig.get().attraction.noiseTimeScale;
-	noiseFrequency = PLConfig.get().attraction.noiseFrequency;
+	useNoiseMatrixAnim:boolean = PLConfig.get().attraction.useNoise;
+	noiseTimeScale:number = PLConfig.get().attraction.noiseTimeScale;
+	noiseFrequency:number = PLConfig.get().attraction.noiseFrequency;
+	noiseAmplitude:number = PLConfig.get().attraction.noiseAmplitude;
 
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +101,7 @@ export class ParticlesLife implements IAnimatedElement {
 		/////////////////////////// COMPUTING ////////////////////////////////////
 		const positionBuffer = storage(new StorageInstancedBufferAttribute(this.particleCount, 2), "vec2", this.particleCount);
 		const velocityBuffer = storage(new StorageInstancedBufferAttribute(this.particleCount, 2), "vec2", this.particleCount);
-		this.updateTypesColorsBuffer();
+		this.updateTypeColors();
 
 		const range = 128; // the simulation space is a square. 
 		const uRange = uniform(range);
@@ -106,7 +109,7 @@ export class ParticlesLife implements IAnimatedElement {
 		const uHalfRange = uniform(halfRange);
 
 		/**
-		 * Initialize the particles positions, velocities and colors
+		 * Initialize/Resets the particles positions and velocities
 		 */
 		this.computeInit = tslFn(() => {
 			const timer = timerGlobal(10000.0); // the function is also called when randomizePositions is called, so the timer is used to make sure the positions are different
@@ -123,10 +126,11 @@ export class ParticlesLife implements IAnimatedElement {
 			velocity.y = 0;
 
 		})().compute(this.particleCount);
-		this.renderer.compute(this.computeInit);
+		this.renderer.compute(this.computeInit); // actual initialization
 
+		// some quick access to the uniforms and functions
 		const { separationDistance, attractionDistance, maxForce, maxVelocity, friction } = this;
-		const { mod, getAttWeight, getResponseLin, getResponseQua, getResponseCub, getResponseRot, getResponseRot2 } = this;
+		const { getAttWeight, getResponseLin, getResponseQua, getResponseCub, getResponseRot, getResponseRot2 } = this;
 
 		/**
 		 * This is the main compute node, in charge of the particles simulation
@@ -166,9 +170,8 @@ export class ParticlesLife implements IAnimatedElement {
 				const attFactor = getAttWeight(type, otherType);
 
 				// calculating and wrapping vector
-				dir.xy = otherPosition.sub(position).xy.add(uHalfRange);
-				dir.x = mod(dir.x, uRange).sub(uHalfRange);
-				dir.y = mod(dir.y, uRange).sub(uHalfRange);
+				dir.xy = otherPosition.sub(position).xy;
+				dir.xy = this.wrapVec(dir, uRange, uHalfRange);
 
 				If(lengthSq(dir).greaterThan(maxDistSq), () => { return; }); // no forces if too far
 
@@ -181,7 +184,7 @@ export class ParticlesLife implements IAnimatedElement {
 
 			});
 
-			// normalizing force
+			// clamping force
 			If(lengthSq(totalForce).greaterThan(maxForceSq), () => {
 				totalForce.assign(normalize(totalForce).mul(maxForce));
 			});
@@ -190,26 +193,23 @@ export class ParticlesLife implements IAnimatedElement {
 			velocity.addAssign(totalForce.mul(delta));
 			velocity.mulAssign(friction.oneMinus());
 
-			// normalizing velocity
+			// clamping velocity
 			If(lengthSq(velocity).greaterThan(maxVelSq), () => {
 				velocity.assign(normalize(velocity).mul(maxVelocity));
 			});
 
-			// pointer interaction
-			If(this.uPointerDown.equal(1), () => {
-				dir.xy = this.uPointer.sub(position).xy;
-				const dist = length(dir);
-				const factor = clamp(dist.div(this.uPointerRange), EPSILON, EPSILON.oneMinus());
-				const pointerForce = pow(factor.oneMinus(), 1.25).mul(this.uPointerAtt).mul(this.uPointerStrength); 
-				velocity.addAssign(dir.mul(pointerForce.div(max(dist, EPSILON))));
-			});
+			// pointer interaction, not clamped to the maxVelocity
+			dir.xy = this.uPointer.sub(position)
+			dir.xy = this.wrapVec(dir, uRange, uHalfRange); // wrapping it too
+			const dist = length(dir);
+			const factor = clamp(dist.div(this.uPointerRange), EPSILON, EPSILON.oneMinus());
+			const pointerForce = pow(factor.oneMinus(), 1.25).mul(this.uPointerAtt).mul(this.uPointerStrength).mul( this.uPointerDown); 
+			velocity.addAssign(dir.mul(pointerForce.div(max(dist, EPSILON))));
 
 			// updating position
 			position.addAssign(velocity.mul(delta));
 			// wrapping position
-			const mPos = position.toVar().add(uHalfRange);
-			mPos.x.assign(mod(mPos.x, uRange).sub(uHalfRange));
-			mPos.y.assign(mod(mPos.y, uRange).sub(uHalfRange));
+			const mPos = this.wrapVec(position.toVar(), uRange, uHalfRange);
 			position.assign(mPos);
 
 
@@ -222,32 +222,33 @@ export class ParticlesLife implements IAnimatedElement {
 		const opacityNode = tslFn(() => {
 			const velocity = velocityBuffer.element(instanceIndex);
 			const relVel = clamp(length(velocity), 0, maxVelocity).div(maxVelocity); // re-clamped because the pointer can make the velocity go over max (on purpose)
-			const rot = cond(this.uOrientToVelocity.equal(1), atan2(velocity.y, velocity.x).negate(), 0.0);
-			const size = cond(this.uVelocityToSize.equal(1), max(0.01, pow(relVel, 1.5)), 1.0).toVar();
-			If(this.uIsAnular.equal(1), () => { size.subAssign(size.mul(float(0.15))) }); // anular shapes are drawn a bit smaller
+			const rot = cond(this.orientToVelocity.equal(1), atan2(velocity.y, velocity.x).negate(), 0.0);
+			const size = cond(this.velocityToSize.equal(1), max(0.01, pow(relVel, 1.5)), 1.0).toVar();
+			If(this.isAnular.equal(1), () => { size.subAssign(size.mul(float(0.15))) }); // anular shapes are drawn a bit smaller
 			const nuv = uv().remap(0, 1, -1, 1);
 			const shape = float(0.0).toVar().assign(this.shapeCircle(nuv, size, rot));
 
 			// I don't like this big if/else. The node should probably be rewritten after a shape update from the UI
-			If(this.uParticleShape.equal(1), () => { shape.assign(this.shapeRoundedX(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(2), () => { shape.assign(this.shapeHex(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(3), () => { shape.assign(this.shapeCross(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(4), () => { shape.assign(this.shapeMoon(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(5), () => { shape.assign(this.shapeHRect(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(6), () => { shape.assign(this.shapeVRect(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(7), () => { shape.assign(this.shapeHLine(nuv, size, rot)) })
-				.elseif(this.uParticleShape.equal(8), () => { shape.assign(this.shapeVLine(nuv, size, rot)) })
+			If(this.particleShape.equal(1), () => { shape.assign(this.shapeRoundedX(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(2), () => { shape.assign(this.shapeHex(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(3), () => { shape.assign(this.shapeCross(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(4), () => { shape.assign(this.shapeMoon(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(5), () => { shape.assign(this.shapeHRect(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(6), () => { shape.assign(this.shapeVRect(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(7), () => { shape.assign(this.shapeHLine(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(8), () => { shape.assign(this.shapeVLine(nuv, size, rot)) })
+				.elseif(this.particleShape.equal(9), () => { shape.assign(this.shapeRoundedBox(nuv, size, rot)) })
 
-			If(this.uIsAnular.equal(1), () => {
+			If(this.isAnular.equal(1), () => {
 				shape.assign(this.anular(shape, size.mul(float(.15)))); // could add a slider for that factor 
 			})
-			const velToAlphaMul = cond(this.uVelocityToAlpha.equal(1), relVel, 1.0);
+			const velToAlphaMul = cond(this.velocityToAlpha.equal(1), relVel, 1.0);
 			return smoothstep(this.particleSmoothness.negate(), 0.0, shape).oneMinus().mul(velToAlphaMul);
 		});
 
-		// Color is picked from the typeColorsBuffer according the instanceIndex
+		// Color is picked from the typeColors according to the instanceIndex
 		const colorNode = tslFn(() => {
-			return this.typeColorsBuffer.element(instanceIndex.remainder(this.nbTypes));
+			return this.typeColors.element(instanceIndex.remainder(this.nbTypes));
 		});
 
 		const particleMat: SpriteNodeMaterial = new SpriteNodeMaterial();
@@ -257,7 +258,7 @@ export class ParticlesLife implements IAnimatedElement {
 		particleMat.scaleNode = this.particleSize;
 		particleMat.transparent = true;
 		particleMat.depthWrite = false;
-		particleMat.depthTest = false;		
+		particleMat.depthTest = false;
 		this.particleMat = particleMat;
 
 		const particles = new InstancedMesh(new PlaneGeometry(5, 5), particleMat, this.particleCount);
@@ -273,32 +274,19 @@ export class ParticlesLife implements IAnimatedElement {
 	}
 
 	/**
-	 * A small buffer contains the colors associated to the 8 types of particles
-	 * Should probably replace this with a uniform array
+	 * A uniform array containing the 8 particle colors of the current palette
 	 * @param isCustom a flag indicating to use the users custom colors
-	 */
-	updateTypesColorsBuffer(isCustom:boolean = false) {
+	 */	
+	updateTypeColors(isCustom:boolean = false) {
 
-		if (this.typeColorsBuffer === undefined) {
-			// creates the buffer if it doesn't exist
-			const initArray = new Float32Array(this.maxTypes * 4).fill(0.0);
-			this.typeColorsBuffer = storageObject(new StorageInstancedBufferAttribute(initArray, 4), "vec4", this.maxTypes);
+		let typeColors: Color[];
+		if( !isCustom) {
+			typeColors = PLPalManager.current.particlesColors.map((c) => new Color(c));
+		} else {
+			typeColors = PLConfig.get().appearance.customColors.map((c) => new Color(c));
 		}
 
-		// set colors from the palette
-		let typeColors: Color[];
-		if( !isCustom)
-			typeColors = PLPalManager.current.particlesColors.map((c) => new Color(c));
-		else 
-			typeColors = PLConfig.get().appearance.customColors.map((c) => new Color(c));
-
-		const updateTypesColorBuffer = tslFn(() => {
-			for (let i = 0; i < this.maxTypes; i++) {
-				const c = typeColors[i];
-				this.typeColorsBuffer.element(i).assign(vec4(c.r, c.g, c.b, 1.0));
-			}
-		});
-		this.renderer.compute(updateTypesColorBuffer().compute(this.maxTypes));
+		this.typeColors.array = typeColors;
 	}
 	//////// TSL REPONSE FUNCTIONS ////////
 	/**
@@ -309,6 +297,19 @@ export class ParticlesLife implements IAnimatedElement {
 	getAttWeight = tslFn(([t1_immutable, t2_immutable]) => {
 		// picking from the uniforms array
 		return this.attractorValues.element(t1_immutable.mul(this.maxTypes).add(t2_immutable));
+	});
+
+	/**
+	 * Wrapping vec2 around the simulation space
+	 * @param v : the vec2 to wrap
+	 * @param r : the range of the simulation space
+	 * @param h : half the range
+	 */
+	wrapVec = tslFn(([v, r, h]) => {
+		v.addAssign(h);
+		v.x.assign(this.mod(v.x, r).sub(h));
+		v.y.assign(this.mod(v.y, r).sub(h));
+		return v;
 	});
 
 	/**
@@ -337,6 +338,11 @@ export class ParticlesLife implements IAnimatedElement {
 	});
 
 	// follows various ways to apply the direction vector to the force
+	/**
+	 * Params
+	 * @param attraction : the weight of the attraction/repulsion, -1 to 1
+	 * @param dir : the vec2 between the particles
+	 */
 	getResponseLin = tslFn(([attraction, dir]) => {
 		const len = length(dir);
 		const force = this.getAttractorForce(attraction, dir);
@@ -375,6 +381,12 @@ export class ParticlesLife implements IAnimatedElement {
 	});
 	//////// TSL : SHAPING FUNCTIONS, also see ../nodes/DistanceFunctions.ts ////////
 	// Applying the rotation to the UVs and shaping the SDFs for the use case
+	/**
+	 * Params
+	 * @param uv_immutable : sample position vec2
+	 * @param size_immutable : size of the shape
+	 * @param rot_immutable : rotation of the shape
+	 */
 	shapeCircle = tslFn(([uv_immutable, size_immutable, rot_immutable]) => {
 		const uv = vec2(uv_immutable).toVar();
 		uv.rotateAssign(rot_immutable);
@@ -429,6 +441,12 @@ export class ParticlesLife implements IAnimatedElement {
 		return sdBox(uv, vec2(0.1, 1.0).mul(size_immutable));
 	});
 
+	shapeRoundedBox = tslFn(([uv_immutable, size_immutable, rot_immutable]) => {
+		const uv = vec2(uv_immutable).toVar();
+		uv.rotateAssign(rot_immutable);
+		return sdRoundedBox(uv, vec2( .75 ).mul( size_immutable) , vec4(.2));
+	});
+
 	anular = tslFn(([shape_immutable, factor_immutable]) => {
 		return abs(shape_immutable).sub(factor_immutable);
 	});
@@ -452,8 +470,6 @@ export class ParticlesLife implements IAnimatedElement {
 		return cond(x.lessThan(0.5), a, sub(1.0, a));
 	});
 
-
-
 	frame: Mesh;
 	/**
 	 * Create the frame, also serving as mask for the particles
@@ -464,18 +480,25 @@ export class ParticlesLife implements IAnimatedElement {
 		const frameGeom: BufferGeometry = new PlaneGeometry(range * 5, range * 5);
 		const hRange = range * 0.5;
 		const frameMat = new MeshBasicNodeMaterial();
+		/**
+		 * a box the size of the simulation space, with a small border
+		 */
 		const frameColor = tslFn(() => {
 			const borderSize = 0.01;
 			return mix(this.frameColor, this.backgroundColor, sdBox(positionWorld.xy.div(float(hRange)), vec2(1.0).add(borderSize)).step(0.0).oneMinus());
 		});
+		/**
+		 * same box, no border but a hole in the middle
+		 */
 		const frameAlpha = tslFn(() => {
 			return sdBox(positionWorld.xy.div(float(hRange)), vec2(1.0)).step(0.0).oneMinus();
 		});
-		frameMat.colorNode = frameColor();
-		frameMat.transparent = true;
+		frameMat.colorNode = frameColor(); // could have been inlined, they're quite short
 		frameMat.opacityNode = frameAlpha();
+		frameMat.transparent = true;		
 		frameMat.depthWrite = false;
-		frameMat.depthTest = true;
+		frameMat.depthTest = false;
+
 		this.frame = new Mesh(frameGeom, frameMat);
 		this.frame.renderOrder = 100;
 		this.scene.add(this.frame);
@@ -562,7 +585,7 @@ export class ParticlesLife implements IAnimatedElement {
 		for (let i = 0; i < this.maxTypes; i++) {
 			for (let j = 0; j < this.maxTypes; j++) {
 				// sample the noise at the 2d position in the matrix
-				const val = this.matrixNoise.scaled([(i + this.lastElapsed * this.noiseTimeScale) * this.noiseFrequency, j * this.noiseFrequency]);
+				const val = this.matrixNoise.scaled([(i + this.lastElapsed * this.noiseTimeScale) * this.noiseFrequency, j * this.noiseFrequency]) * this.noiseAmplitude;
 				newData.push(val);
 			}
 		}
@@ -588,27 +611,34 @@ export class ParticlesLife implements IAnimatedElement {
 	onPointerDown(e: PointerEvent): void {
 		if (e.pointerType !== 'mouse' || e.button === 0) {
 			this.pointerDown = true;
-			this.uPointerDown.value = 1;
 		}
 		this.updateScreenPointer(e);
 	}
 	onPointerUp(e: PointerEvent): void {
-		this.pointerDown = false;
-		this.uPointerDown.value = 0;
 		this.updateScreenPointer(e);
+		this.pointerDown = false;
+		
 	}
 	onPointerMove(e: PointerEvent): void {
 		this.updateScreenPointer(e);
 	}
 	updateScreenPointer(e: PointerEvent): void {
-		this.pointer.set(
-			(e.clientX / window.innerWidth) * 2 - 1,
-			- (e.clientY / window.innerHeight) * 2 + 1
-		);
-		this.rayCaster.setFromCamera(this.pointer, this.camera);
-		this.rayCaster.ray.intersectPlane(this.iPlane, this.scenePointer);
-		this.uPointer.value.x = this.scenePointer.x;
-		this.uPointer.value.y = this.scenePointer.y;
+		if( this.pointerDown ) 
+		{
+			this.pointer.set(
+				(e.clientX / window.innerWidth) * 2 - 1,
+				- (e.clientY / window.innerHeight) * 2 + 1
+			);
+			this.rayCaster.setFromCamera(this.pointer, this.camera);
+			this.rayCaster.ray.intersectPlane(this.iPlane, this.scenePointer);
+			this.uPointer.value.x = this.scenePointer.x;
+			this.uPointer.value.y = this.scenePointer.y;
+		}	
+	}
+
+	updatePointerForce()
+	{
+		this.uPointerDown.value = MathUtils.lerp(this.uPointerDown.value, this.pointerDown ? 1 : 0, .1); 
 	}
 
 	scrollLimit: number = 64;
@@ -696,12 +726,11 @@ export class ParticlesLife implements IAnimatedElement {
 	update(dt: number, elapsed: number): void {
 
 		this.clampControls();
+		this.updatePointerForce();
 		this.handleCurvePlacement();
 		this.handleMatrixAnimation();
 		//this.renderer.computeAsync(this.computeParticles);
 		this.renderer.compute(this.computeParticles);
-
-		
 
 		this.lastElapsed = elapsed;
 	}
@@ -714,39 +743,41 @@ export class ParticlesLife implements IAnimatedElement {
 	public static updateFullConfig(config: PLConfig): void {
 		if (ParticlesLife.instance !== undefined) {
 			const i = ParticlesLife.instance;
-			i.nbTypes.value = config.attraction.nbTypes;
+			
 			i.timeScale.value = config.physics.timeScale;
-			i.uAttractorType.value = config.attraction.response;
 			i.friction.value = config.physics.friction;
-			i.separationDistance.value = config.physics.separationDistance;
-			i.attractionDistance.value = config.physics.attractionDistance;
 			i.maxForce.value = config.physics.maxForce;
 			i.maxVelocity.value = config.physics.maxVelocity;
+			i.separationDistance.value = config.physics.separationDistance;
+			i.attractionDistance.value = config.physics.attractionDistance;			
 			i.separationForce.value = config.physics.separationForce;
 			i.attractionForce.value = config.physics.attractionForce;
 			i.attractionAttack.value = config.physics.attractionAttack;
 			i.attractionDecay.value = config.physics.attractionDecay;
 			i.attractionGain.value = config.physics.attractionGain;
 			i.separationPower.value = config.physics.separationPower;
-
-			i.particleSize.value = config.appearance.particleSize;
+			
+			i.nbTypes.value = config.attraction.nbTypes;
 			i.uAttractorType.value = config.attraction.response;
-			i.particleSmoothness.value = config.appearance.particleSmoothness;
-			i.uVelocityToSize.value = config.appearance.velToSize ? 1 : 0;
-			i.uVelocityToAlpha.value = config.appearance.velToAlpha ? 1 : 0;
-			i.uOrientToVelocity.value = config.appearance.orientToVel ? 1 : 0;
-			i.uIsAnular.value = config.appearance.makeAnular ? 1 : 0;
-			i.uParticleShape.value = config.appearance.shape;
+			ParticlesLife.updateWeightsMatrix(config.attraction.values);
 			i.useNoiseMatrixAnim = config.attraction.useNoise;
 			i.noiseTimeScale = config.attraction.noiseTimeScale;
 			i.noiseFrequency = config.attraction.noiseFrequency;
+			i.noiseAmplitude = config.attraction.noiseAmplitude;
+
+			ParticlesLife.updatePalette(config.appearance.palette);
+			i.particleShape.value = config.appearance.shape;
+			i.particleSize.value = config.appearance.particleSize;
+			i.particleSmoothness.value = config.appearance.particleSmoothness;
+			i.velocityToSize.value = config.appearance.velToSize ? 1 : 0;
+			i.velocityToAlpha.value = config.appearance.velToAlpha ? 1 : 0;
+			i.orientToVelocity.value = config.appearance.orientToVel ? 1 : 0;
+			i.isAnular.value = config.appearance.makeAnular ? 1 : 0;
+			i.particleMat.blending = config.appearance.additive ? AdditiveBlending : NormalBlending;
 
 			i.uPointerAtt.value = config.pointer.attraction;
 			i.uPointerStrength.value = config.pointer.strength;
 			i.uPointerRange.value = config.pointer.range;
-
-			ParticlesLife.updatePalette(config.appearance.palette);
-			ParticlesLife.updateWeightsMatrix(config.attraction.values);
 		}
 	}
 
@@ -781,10 +812,11 @@ export class ParticlesLife implements IAnimatedElement {
 		}
 	}
 
-	public static updatePerlinParams(timeScale: number, frequency: number): void {
+	public static updatePerlinParams(timeScale: number, frequency: number, amplitude:number ): void {
 		if (ParticlesLife.instance !== undefined) {
 			ParticlesLife.instance.noiseTimeScale = timeScale;
 			ParticlesLife.instance.noiseFrequency = frequency;
+			ParticlesLife.instance.noiseAmplitude = amplitude;
 		}
 	}
 
@@ -796,26 +828,26 @@ export class ParticlesLife implements IAnimatedElement {
 
 	public static updateVeloToSize(value: boolean): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.uVelocityToSize.value = value ? 1 : 0;
+			ParticlesLife.instance.velocityToSize.value = value ? 1 : 0;
 		}
 	}
 
 	public static updateVeloToAlpha(value: boolean): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.uVelocityToAlpha.value = value ? 1 : 0;
+			ParticlesLife.instance.velocityToAlpha.value = value ? 1 : 0;
 		}
 
 	}
 
 	public static updateOrientToVel(value: boolean): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.uOrientToVelocity.value = value ? 1 : 0;
+			ParticlesLife.instance.orientToVelocity.value = value ? 1 : 0;
 		}
 	}
 
 	public static updateAnular(value: boolean): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.uIsAnular.value = value ? 1 : 0;
+			ParticlesLife.instance.isAnular.value = value ? 1 : 0;
 		}
 	}
 
@@ -827,20 +859,21 @@ export class ParticlesLife implements IAnimatedElement {
 
 	public static updatePartShape(value: number): void {
 		if (ParticlesLife.instance !== undefined) {
-			ParticlesLife.instance.uParticleShape.value = value;
+			ParticlesLife.instance.particleShape.value = value;
 		}
 	}
 
 	public static updatePalette(value: string): void {
 		if (ParticlesLife.instance !== undefined) {
 			const i = ParticlesLife.instance;
-			if( value === 'custom')
+			if( value.toLowerCase() === 'custom')
 			{
+				
 				const app = PLConfig.get().appearance;
 				i.scene.background = new Color(app.customBackgroundColor);
 				i.backgroundColor.value = new Color(app.customBackgroundColor);
 				i.frameColor.value = new Color(app.customFrameColor);
-				i.updateTypesColorsBuffer(true);
+				i.updateTypeColors(true);
 			}
 			else 
 			{
@@ -849,7 +882,7 @@ export class ParticlesLife implements IAnimatedElement {
 				i.scene.background = new Color(p.backgroundColor);
 				i.backgroundColor.value = new Color(p.backgroundColor); // for some reason, doesn't work with color(p.backgroundColor);
 				i.frameColor.value = new Color(p.frameColor);
-				i.updateTypesColorsBuffer();
+				i.updateTypeColors();
 			}
 		}
 	}

@@ -29,11 +29,11 @@ export default function IntroModal({
             <div className="modal-box">
                 <div className="font-bold text-lg">Hello!</div>
                 { hasWebGPU && 
-                    <div className="pt-4 flex flex-col">
+                    <div className="pt-4 flex flex-col text-justify">
                     
                         <div className="pb-2">Welcome to "Particles of a thousand faces", a toy designed while experimenting with the Three Shading Language.</div>
                         <div className="pb-2 flex-row">The drawer accessible by clicking the <b><span className="inline-flex h-4 w-4 mx-1">{tools()}</span> button</b> in the top left contains all the settings to tweak the simulation.</div>
-                        <div className="pb-2 flex-row">Access more infos by clicking the <b>? button</b> in the top left.</div>
+                        <div className="pb-2 flex-row">Access more infos by clicking the <b>? button</b>, also in the top left.</div>
                         <div className="pb-2">
                             <div className="text-lg">Controls</div>
                             <li>Left click to interact with the particles</li>

@@ -78,6 +78,7 @@ function App() {
 					const json = event.target?.result as string;
 					const parsed = JSON.parse(json);
 					setConfig(parsed);
+					PLConfig.set(parsed);
 					ParticlesLife.updateFullConfig(parsed);
 					Root.setUseAfterImage(parsed.appearance.afterImage);
 				};
@@ -101,12 +102,14 @@ function App() {
 	const handlePhyParamChange = (paramName: string, value: number) => {
 		config.physics[paramName] = value;
 		setConfig({ ...config });
+		PLConfig.set(config);
 		ParticlesLife.updatePhyParam(paramName, value);
 	};
 
 	const handleAttParamChange = (paramName: string, value: string | number | boolean) => {
 		config.attraction[paramName] = value;
 		setConfig({ ...config });
+		PLConfig.set(config);
 		switch (paramName) {
 			case 'nbTypes':
 				ParticlesLife.updateNbTypes(value as number);
@@ -115,10 +118,13 @@ function App() {
 				ParticlesLife.togglePerlinAnim(value as boolean);
 				break;
 			case 'noiseTimeScale':
-				ParticlesLife.updatePerlinParams(value as number, config.attraction.noiseFrequency as number);
+				ParticlesLife.updatePerlinParams(value as number, config.attraction.noiseFrequency as number, config.attraction.noiseAmplitude as number);
 				break;
 			case 'noiseFrequency':
-				ParticlesLife.updatePerlinParams(config.attraction.noiseTimeScale as number, value as number);
+				ParticlesLife.updatePerlinParams(config.attraction.noiseTimeScale as number, value as number, config.attraction.noiseAmplitude as number);
+				break;
+			case 'noiseAmplitude':
+				ParticlesLife.updatePerlinParams(config.attraction.noiseTimeScale as number, config.attraction.noiseFrequency as number, value as number);
 				break;
 			case 'response':
 				ParticlesLife.updateResponse(value as number);
@@ -129,7 +135,9 @@ function App() {
 	const handleAttMatrixChange = (data: number[]) => {
 		config.attraction.values = data;
 		ParticlesLife.updateWeightsMatrix(data);
+		PLConfig.set(config);
 		setConfig({ ...config });
+
 	}
 
 	setExtMatrixData = (data: number[]) => {
@@ -139,6 +147,7 @@ function App() {
 	const handleAppParamChange = (paramName: string, value: string | number | boolean) => {
 		config.appearance[paramName] = value;
 		setConfig({ ...config });
+		PLConfig.set(config);
 		switch (paramName) {
 			case 'palette':
 				if ((value as string).toLowerCase() === 'custom') {
@@ -181,6 +190,7 @@ function App() {
 	const handlePointerParamChange = (paramName: string, value: number) => {
 		config.pointer[paramName] = value;
 		setConfig({ ...config });
+		PLConfig.set(config);
 		switch (paramName) {
 			case 'attraction':
 				ParticlesLife.updatePointerParams(value, config.pointer.strength, config.pointer.range);
@@ -201,6 +211,7 @@ function App() {
 	const handlePresetLoadRequest = (preset) => {
 		console.log("handlePresetLoad : ", preset)
 		setConfig(preset);
+		PLConfig.set(preset);
 		Root.setUseAfterImage(preset.appearance.afterImage);
 		ParticlesLife.updateFullConfig(preset);
 		ParticlesLife.randomizePositions();
@@ -240,10 +251,8 @@ function App() {
 				break;
 		}
 		setConfig({ ...config });
-		clearTimeout(customPaletteUpdateTimeout.current);
-		customPaletteUpdateTimeout.current = setTimeout(() => {
-			ParticlesLife.updatePalette('custom');
-		}, 30);
+		PLConfig.set(config);
+		ParticlesLife.updatePalette('custom');
 	}
 
 	const handleCaptureRequest = () => {

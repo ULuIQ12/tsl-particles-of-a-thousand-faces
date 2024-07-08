@@ -14,6 +14,10 @@ export default class PLConfig {
         return PLConfig.instance;
     }
 
+    static set(config: PLConfig) {
+        PLConfig.instance = config;
+    }
+
     private static instance: PLConfig;
     constructor() {
         if (PLConfig.instance != null) {
@@ -45,6 +49,7 @@ export class PLAttractionConfig {
     useNoise: boolean = false;
     noiseTimeScale: number = 1.0;
     noiseFrequency: number = 0.5;
+    noiseAmplitude: number = 0.5;
 }
 
 export class PLAppearanceConfig {

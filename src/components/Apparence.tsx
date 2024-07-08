@@ -60,6 +60,7 @@ export default function Apparence({
         "Vertical Rect.",
         "Horizontal Line",
         "Vertical Line",
+        "Rounded box",
     ]
 
     const handleShapeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -154,22 +155,28 @@ export default function Apparence({
                 min={0} max={1} step={0.001}
                 value={config.appearance.particleSmoothness} paramName="particleSmoothness" onChange={handlePartSmoothnessChange}
             />
-            <label className="label cursor-pointer px-0 py-1">
-                <span className="label-text">Velocity to size</span>
-                <input type="checkbox" className="toggle" checked={config.appearance.velToSize} onChange={handleVelToSizeChange} />
-            </label>
-            <label className="label cursor-pointer px-0 py-1">
-                <span className="label-text">Velocity to alpha</span>
-                <input type="checkbox" className="toggle" checked={config.appearance.velToAlpha} onChange={handleVelToAlphaChange} />
-            </label>
+            <div className='tooltip' data-tip="Slower = smaller">
+                <label className="label cursor-pointer px-0 py-1">
+                    <span className="label-text">Velocity to size</span>
+                    <input type="checkbox" className="toggle" checked={config.appearance.velToSize} onChange={handleVelToSizeChange} />
+                </label>
+            </div>
+            <div className='tooltip' data-tip="Slower = more transparent">
+                <label className="label cursor-pointer px-0 py-1">
+                    <span className="label-text">Velocity to alpha</span>
+                    <input type="checkbox" className="toggle" checked={config.appearance.velToAlpha} onChange={handleVelToAlphaChange} />
+                </label>
+            </div>
             <label className="label cursor-pointer px-0 py-1">
                 <span className="label-text">Orient towards velocity</span>
                 <input type="checkbox" className="toggle" checked={config.appearance.orientToVel} onChange={handleOrientToVelChange} />
             </label>
+            <div className='tooltip' data-tip="Just display the outline">
             <label className="label cursor-pointer px-0 py-1">
                 <span className="label-text">Make shape anular</span>
                 <input type="checkbox" className="toggle" checked={config.appearance.makeAnular} onChange={handleMakeAnularChange} />
             </label>
+            </div>
             <div className='tooltip' data-tip="Doesn't play well with light background">
                 <label className="label cursor-pointer px-0 py-1">
                     <span className="label-text">Additive blending</span>

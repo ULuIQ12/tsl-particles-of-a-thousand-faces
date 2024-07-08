@@ -15,7 +15,7 @@ export default function ConfigPresets({
     const getPresetFolderContent = () => {
         
         if (import.meta.env.MODE === 'development') {
-            const data = ["colorful_chasers", "small_lines", "blobby_liquid", "hexa_worms", "turbulent_clown", "structures", "rings", "tri_cells"];
+            const data = ["colorful_chasers", "small_lines", "blobby_liquid", "hexa_worms", "turbulent_clown", "painterly_chasers", "cells", "tri_cells", "mondrianflow"];
             setPresetFiles(data);
             setSelectedPreset(data[0]);
         }

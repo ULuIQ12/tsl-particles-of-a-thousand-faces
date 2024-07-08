@@ -140,6 +140,11 @@ export default function MatrixEditor({
         onParamChange("noiseFrequency", value);
     };
 
+    const handleNoiseAmplitudeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = parseFloat(event.target.value);
+        onParamChange("noiseAmplitude", value);
+    };
+
     const responses = [
         "Linear",
         "Quadratic",
@@ -181,7 +186,7 @@ export default function MatrixEditor({
             <div className='flex flex-wrap justify-between gap-4 mt-4'>
                 <button className='btn btn-neutral btn-sm flex-grow' disabled={config.attraction.useNoise} onClick={handleClickRandomizeWeights}>Randomize weights</button>
                 <button className='btn btn-neutral btn-sm flex-grow' disabled={config.attraction.useNoise} onClick={handleClickSetToZero}>Set weights to zero</button>
-                <button className='btn btn-neutral btn-sm flex-grow' disabled={config.attraction.useNoise} onClick={handleMirrorValues}>Mirror top left to bottom right</button>
+                <button className='btn btn-neutral btn-sm flex-grow' disabled={config.attraction.useNoise} onClick={handleMirrorValues}>Mirror top right to bottom left</button>
 
             </div>
             <div className="divider my-2"></div>
@@ -211,6 +216,11 @@ export default function MatrixEditor({
                         label="Noise frequency"
                         min={0.01} max={2} step={0.001}
                         value={config.attraction.noiseFrequency} paramName="noiseFrequency" onChange={handleNoiseFrequencyChange}
+                    />
+                    <Slider 
+                        label="Noise amplitude"
+                        min={0.01} max={1} step={0.001}
+                        value={config.attraction.noiseAmplitude} paramName="noiseAmplitude" onChange={handleNoiseAmplitudeChange}
                     />
                 </div>
             </div>
